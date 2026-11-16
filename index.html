@@ -63,11 +63,24 @@ p{color:var(--muted);margin:0 0 14px}
 .strike-form legend{font-size:.86rem;font-weight:720;padding:0}
 .strike-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
 .strike-fields label{display:block;margin:6px 0 3px;font-size:.78rem}
-.strike-fields input{width:100%;min-width:0;padding:6px;border:1px solid #8d9d90;border-radius:4px;background:white;color:var(--ink);font:inherit;font-size:1rem}
+.strike-fields input,.strike-fields select,.chain-target select{width:100%;min-width:0;padding:6px;border:1px solid #8d9d90;border-radius:4px;background:white;color:var(--ink);font:inherit;font-size:1rem}
 .strike-form .apply-strikes{margin-top:8px;padding:6px 10px;background:var(--accent);color:white;font-weight:720}
 .strike-form .apply-strikes:hover{background:#0b5b50}
 .strike-status{margin:6px 0 0;font-size:.78rem}
 .strike-status:empty{display:none}
+.option-chain{margin:0 0 14px}
+.option-chain summary{cursor:pointer;font-weight:720;font-size:.9rem}
+.chain-target{display:grid;grid-template-columns:auto minmax(0,1fr);gap:8px;align-items:center;margin:8px 0}
+.chain-target label{margin:0}
+.chain-scroll{max-height:240px;overflow:auto;border:1px solid var(--line);border-radius:4px}
+.chain-scroll table{text-align:center}
+.chain-scroll thead th{position:sticky;top:0;background:var(--paper);z-index:1}
+.chain-scroll th:first-child,.chain-scroll td:first-child{text-align:center}
+.chain-scroll th,.chain-scroll td{padding:4px}
+.chain-scroll .chain-quote{display:block;width:100%;background:#edf3eb;color:var(--ink);line-height:1.2;padding:4px 2px}
+.chain-quote small{display:block;font-size:.68rem;font-weight:700}
+.chain-scroll .chain-quote[aria-pressed=true]{background:var(--accent);color:white}
+.chain-scroll .near-spot th[scope=row]{background:#daf2e7;color:#164f42}
 input[type=range]{width:100%;accent-color:var(--accent);margin:0 0 4px}
 .data-row{display:flex;justify-content:space-between;gap:10px;font-size:.82rem;padding-top:6px}
 .fine{font-size:.78rem;margin:10px 0 0}
@@ -138,28 +151,40 @@ th,td{padding:8px 3px;border-bottom:1px solid var(--line)}th:first-child,td:firs
     </div>
   </section>
   <section class="section" id="demo">
-    <div class="section-heading"><div><p class="eyebrow">INTERACTIVE EXAMPLE</p><h2>Build a NIFTY call spread</h2></div><p id="position-risk" aria-live="polite"></p></div>
+    <div class="section-heading"><div><p class="eyebrow">INTERACTIVE EXAMPLE</p><h2>Build a NIFTY options position</h2></div><p id="position-risk" aria-live="polite"></p></div>
     <div class="demo-grid">
       <article class="panel inputs">
         <div class="panel-title"><h3>Scenario inputs</h3><button type="button" id="reset">Reset</button></div>
+        <details class="option-chain" open>
+          <summary>Simulated NIFTY option chain</summary>
+          <p class="fine" id="chain-help">Model premiums in index points at the scenario spot, IV and days to expiry. Choose a leg and select a call or put.</p>
+          <div class="chain-target"><label for="chain-target">Choose for</label><select id="chain-target"><option value="0">Buy leg</option><option value="1">Sell leg</option></select></div>
+          <div id="chain-scroll" class="chain-scroll" role="region" tabindex="0" aria-label="Scrollable option chain">
+            <table aria-describedby="chain-help"><thead><tr><th scope="col">Calls (CE)</th><th scope="col">Strike</th><th scope="col">Puts (PE)</th></tr></thead><tbody id="chain-rows"></tbody></table>
+          </div>
+        </details>
         <form id="strike-form" class="strike-form">
           <fieldset>
             <legend>Choose strikes and lots</legend>
             <div class="strike-fields">
               <div>
-                <label for="long-strike">Buy call strike</label>
+                <label for="long-type">Buy option</label>
+                <select id="long-type"><option value="call">Call (CE)</option><option value="put">Put (PE)</option></select>
+                <label for="long-strike">Buy strike</label>
                 <input id="long-strike" type="number" inputmode="numeric" min="23500" max="26500" step="1" value="25000" required aria-describedby="strike-help">
                 <label for="long-lots">Lots to buy</label>
                 <input id="long-lots" type="number" inputmode="numeric" min="1" step="1" value="1" required>
               </div>
               <div>
-                <label for="short-strike">Sell call strike</label>
+                <label for="short-type">Sell option</label>
+                <select id="short-type"><option value="call">Call (CE)</option><option value="put">Put (PE)</option></select>
+                <label for="short-strike">Sell strike</label>
                 <input id="short-strike" type="number" inputmode="numeric" min="23500" max="26500" step="1" value="25200" required aria-describedby="strike-help">
                 <label for="short-lots">Lots to sell</label>
                 <input id="short-lots" type="number" inputmode="numeric" min="1" step="1" value="4" required>
               </div>
             </div>
-            <p id="strike-help" class="fine">Enter whole strikes from 23,500 to 26,500. The buy strike must be lower.</p>
+            <p id="strike-help" class="fine">Pick from the chain or enter whole strikes from 23,500 to 26,500. Apply the position to update the Plate and P&amp;L.</p>
             <button class="apply-strikes" type="submit">Apply position</button>
             <p id="strike-status" class="strike-status" role="status"></p>
           </fieldset>
@@ -208,7 +233,11 @@ const longLotsInput = get('long-lots');
 const shortLotsInput = get('short-lots');
 const lotInputs = [longLotsInput, shortLotsInput];
 const strikeStatus = get('strike-status');
-let strike, quantity;
+const strikeInputs = [longStrikeInput, shortStrikeInput];
+const typeInputs = [get('long-type'), get('short-type')];
+const chainTarget = get('chain-target');
+const chainScroll = get('chain-scroll');
+let strike, quantity, optionTypes;
 const spotInput = get('spot');
 const ivInput = get('iv');
 const daysInput = get('days');
@@ -225,43 +254,55 @@ const plateColors = {
   spot: plateStyle.getPropertyValue('--plate-spot').trim()
 };
 
-function callMoneyness(spot, k) {
+function intrinsicValue(spot, k, type) {
+  return Math.max(type === 'call' ? spot - k : k - spot, 0);
+}
+function moneyness(spot, k, type) {
   if (spot === k) return 'ATM';
-  return spot > k ? 'ITM' : 'OTM';
+  return intrinsicValue(spot, k, type) > 0 ? 'ITM' : 'OTM';
+}
+function optionCode(type) {
+  return type === 'call' ? 'CE' : 'PE';
 }
 
 function cdf(value) {
+  if (value === 0) return .5;
   const z = Math.abs(value);
   const t = 1 / (1 + .2316419 * z);
   const density = Math.exp(-z*z/2) / Math.sqrt(2 * Math.PI);
   const tail = density * t * (.319381530 + t * (-.356563782 + t * (1.781477937 + t * (-1.821255978 + t * 1.330274429))));
   return value < 0 ? tail : 1 - tail;
 }
-function call(spot, k, iv, days) {
-  if (days === 0) return Math.max(spot - k, 0);
+function optionPrice(spot, k, iv, days, type) {
+  if (days === 0) return intrinsicValue(spot, k, type);
   const tau = days / 365;
   const sd = iv * Math.sqrt(tau);
   const d1 = (Math.log(spot / k) + (rate + iv*iv/2) * tau) / sd;
-  return spot * cdf(d1) - k * Math.exp(-rate * tau) * cdf(d1 - sd);
+  const d2 = d1 - sd;
+  const discountedStrike = k * Math.exp(-rate * tau);
+  return Math.max(0, type === 'call'
+    ? spot * cdf(d1) - discountedStrike * cdf(d2)
+    : discountedStrike * cdf(-d2) - spot * cdf(-d1));
 }
 function entryValues() {
   const spot = Number(spotInput.defaultValue);
   const iv = Number(ivInput.defaultValue) / 100;
   const days = Number(daysInput.defaultValue);
-  return strike.map((k, i) => quantity[i] * call(spot, k, iv, days));
+  return strike.map((k, i) => quantity[i] * optionPrice(spot, k, iv, days, optionTypes[i]));
 }
 let entry;
 function applyPosition() {
   strike = [longStrikeInput.valueAsNumber, shortStrikeInput.valueAsNumber];
   quantity = [longLotsInput.valueAsNumber, -shortLotsInput.valueAsNumber];
+  optionTypes = typeInputs.map(input => input.value);
   entry = entryValues();
   renderPositionRisk();
 }
 applyPosition();
 function position(spot, iv, days) {
   return strike.map((k, i) => {
-    const marketValue = quantity[i] * call(spot, k, iv, days);
-    const intrinsic = quantity[i] * Math.max(spot - k, 0);
+    const marketValue = quantity[i] * optionPrice(spot, k, iv, days, optionTypes[i]);
+    const intrinsic = quantity[i] * intrinsicValue(spot, k, optionTypes[i]);
     return {intrinsic, extrinsic: marketValue - intrinsic, pnl: marketValue - entry[i]};
   });
 }
@@ -297,15 +338,13 @@ function drawPlate(spot) {
   region(maxSpot, '#34494d');
   region(spot, '#70462e');
   for (let level = minSpot; level <= maxSpot; level += 250) ring(level, '#d3dedf45', 1);
-  strike.forEach(k => {
-    const moneyness = callMoneyness(spot, k);
-    if (moneyness === 'ATM') return;
-    ring(k, moneyness === 'ITM' ? plateColors.copper : plateColors.nickel, 2);
-  });
+  for (const k of new Set(strike)) {
+    if (k !== spot) ring(k, k < spot ? plateColors.copper : plateColors.nickel, 2);
+  }
   ring(spot, plateColors.spot, 2.5, [6, 4]);
-  const callLabels = strike.map((k, i) =>
-    (i === 0 ? 'Buy ' : 'Sell ') + whole.format(Math.abs(quantity[i])) + ' lots at ' + whole.format(k) + ', ' + callMoneyness(spot, k));
-  plate.setAttribute('aria-label', 'NIFTY spot ' + whole.format(spot) + '. ' + callLabels.join('. ') + '.');
+  const legLabels = strike.map((k, i) =>
+    (i === 0 ? 'Buy ' : 'Sell ') + whole.format(Math.abs(quantity[i])) + ' lots at ' + whole.format(k) + ' ' + optionCode(optionTypes[i]) + ', ' + moneyness(spot, k, optionTypes[i]));
+  plate.setAttribute('aria-label', 'NIFTY spot ' + whole.format(spot) + '. ' + legLabels.join('. ') + '.');
   ctx.fillStyle = '#ebf8ed';
   ctx.font = '600 22px system-ui';
   ctx.textAlign = 'center';
@@ -344,11 +383,21 @@ function drawChart(spot, iv, days, pnl) {
   ctx.fillStyle = '#aa4f30'; ctx.fill();
   ctx.textAlign = 'center'; ctx.textBaseline = 'top'; ctx.fillStyle = '#51685e';
   for (let s=minSpot; s<=maxSpot; s+=500) ctx.fillText(whole.format(s), x(s), bottom+11);
+  if (values.every(value => value === 0)) {
+    get('roots').textContent = 'P&L is zero across the displayed spot range.';
+    return;
+  }
   const roots = [];
-  for (let i = 1; i < samples.length; i++) {
-    const [a, pa] = samples[i-1];
-    const [b, pb] = samples[i];
-    if (pa === 0) roots.push(a);
+  for (let i = 0; i < samples.length; i++) {
+    const [a, pa] = samples[i];
+    if (pa === 0) {
+      const start = i;
+      while (i + 1 < samples.length && samples[i + 1][1] === 0) i++;
+      roots.push(start === i ? format.format(a) : format.format(a) + '–' + format.format(samples[i][0]));
+      continue;
+    }
+    if (i + 1 === samples.length) break;
+    const [b, pb] = samples[i + 1];
     if (pa * pb < 0) {
       let low = a, high = b;
       for (let j=0; j<25; j++) {
@@ -356,21 +405,21 @@ function drawChart(spot, iv, days, pnl) {
         if (Math.sign(totalAt(middle, iv, days)) === Math.sign(pa)) low = middle;
         else high = middle;
       }
-      roots.push((low+high)/2);
+      roots.push(format.format((low+high)/2));
     }
   }
-  if (samples.at(-1)[1] === 0) roots.push(maxSpot);
-  get('roots').textContent = roots.length ? 'Break-even in this range: ' + roots.map(s => format.format(s)).join(', ') + '.' : 'No break-even in the displayed spot range.';
+  get('roots').textContent = roots.length ? 'Scenario break-even near ' + roots.join(', ') + '.' : 'No break-even in the displayed spot range.';
 }
 function renderPositionRisk() {
-  const netLots = quantity[0] + quantity[1];
-  if (netLots < 0) {
-    get('position-risk').textContent = 'With more short than long calls, losses can grow without limit as NIFTY rises.';
-  } else if (netLots === 0) {
-    get('position-risk').textContent = 'With equal lots, expiry P&L stays flat once NIFTY is above the sell strike.';
-  } else {
-    get('position-risk').textContent = 'With more long than short calls, expiry P&L rises as NIFTY moves above the sell strike.';
-  }
+  const callLots = quantity.reduce((sum, lots, i) => sum + (optionTypes[i] === 'call' ? lots : 0), 0);
+  const putLots = quantity.reduce((sum, lots, i) => sum + (optionTypes[i] === 'put' ? lots : 0), 0);
+  const upside = callLots < 0 ? 'Upside losses can grow without limit.'
+    : callLots > 0 ? 'Expiry P&L rises above both strikes.'
+    : 'Expiry P&L is flat above both strikes.';
+  const downside = putLots < 0 ? 'Expiry P&L falls as NIFTY drops below both strikes.'
+    : putLots > 0 ? 'Expiry P&L rises as NIFTY drops below both strikes.'
+    : 'Expiry P&L is flat below both strikes.';
+  get('position-risk').textContent = upside + ' ' + downside;
 }
 function render() {
   const spot = +spotInput.value, days = +daysInput.value, iv = +ivInput.value / 100;
@@ -390,11 +439,11 @@ function render() {
     const row = document.createElement('tr');
     const label = document.createElement('th');
     label.scope = 'row';
-    label.textContent = (i === 0 ? '+' : '−') + whole.format(Math.abs(quantity[i])) + ' × ' + whole.format(strike[i]);
-    const moneyness = document.createElement('small');
-    moneyness.className = 'leg-moneyness';
-    moneyness.textContent = callMoneyness(spot, strike[i]);
-    label.append(moneyness);
+    label.textContent = (i === 0 ? '+' : '−') + whole.format(Math.abs(quantity[i])) + ' × ' + whole.format(strike[i]) + ' ' + optionCode(optionTypes[i]);
+    const moneynessLabel = document.createElement('small');
+    moneynessLabel.className = 'leg-moneyness';
+    moneynessLabel.textContent = moneyness(spot, strike[i], optionTypes[i]);
+    label.append(moneynessLabel);
     row.append(label);
     [leg.intrinsic,leg.extrinsic,leg.pnl].forEach(value => {
       const cell = document.createElement('td');
@@ -406,25 +455,20 @@ function render() {
   get('legs').replaceChildren(...rows);
   drawPlate(spot);
   drawChart(spot, iv, days, pnl);
+  renderChain(spot, iv, days);
 }
 [spotInput,ivInput,daysInput].forEach(input => input.addEventListener('input', render));
-[longStrikeInput, shortStrikeInput].forEach(input => input.addEventListener('input', () => {
-  shortStrikeInput.setCustomValidity('');
+[...strikeInputs, ...typeInputs].forEach(input => input.addEventListener('input', () => {
   strikeStatus.textContent = '';
+  markChainSelection();
 }));
+chainTarget.addEventListener('change', markChainSelection);
 lotInputs.forEach(input => input.addEventListener('input', () => {
   input.setCustomValidity('');
   strikeStatus.textContent = '';
 }));
 strikeForm.addEventListener('submit', event => {
   event.preventDefault();
-  const longStrike = longStrikeInput.valueAsNumber;
-  const shortStrike = shortStrikeInput.valueAsNumber;
-  if (longStrike >= shortStrike) {
-    shortStrikeInput.setCustomValidity('Enter a sell strike above the buy strike.');
-    shortStrikeInput.reportValidity();
-    return;
-  }
   const invalidLots = lotInputs.find(input => !Number.isSafeInteger(input.valueAsNumber) || input.valueAsNumber < 1);
   if (invalidLots) {
     invalidLots.setCustomValidity('Enter a positive whole number of lots within the supported range.');
@@ -437,7 +481,7 @@ strikeForm.addEventListener('submit', event => {
 });
 get('reset').addEventListener('click', () => {
   strikeForm.reset();
-  shortStrikeInput.setCustomValidity('');
+  chainTarget.value = '0';
   strikeStatus.textContent = '';
   lotInputs.forEach(input => input.setCustomValidity(''));
   applyPosition();
@@ -453,7 +497,60 @@ chart.addEventListener('click', event => {
   spotInput.value = minSpot + Math.round(portion * (maxSpot-minSpot) / step) * step;
   render();
 });
+const chainRows = [];
+for (let k = minSpot; k <= maxSpot; k += 50) {
+  const row = document.createElement('tr');
+  const strikeCell = document.createElement('th');
+  strikeCell.scope = 'row';
+  strikeCell.textContent = whole.format(k);
+  function quote(type) {
+    const cell = document.createElement('td');
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'chain-quote';
+    const premium = document.createElement('span');
+    const status = document.createElement('small');
+    button.append(premium, status);
+    button.addEventListener('click', () => {
+      const i = Number(chainTarget.value);
+      strikeInputs[i].value = k;
+      typeInputs[i].value = type;
+      strikeStatus.textContent = 'Ready to apply ' + (i === 0 ? 'buy ' : 'sell ') + whole.format(k) + ' ' + optionCode(type) + '.';
+      markChainSelection();
+    });
+    cell.append(button);
+    return {type, cell, button, premium, status};
+  }
+  const ce = quote('call'), pe = quote('put');
+  row.append(ce.cell, strikeCell, pe.cell);
+  get('chain-rows').append(row);
+  chainRows.push({k, row, quotes: [ce, pe]});
+}
+function markChainSelection() {
+  const i = Number(chainTarget.value);
+  const selectedStrike = strikeInputs[i].valueAsNumber;
+  const selectedType = typeInputs[i].value;
+  for (const {k, quotes} of chainRows) {
+    for (const {type, button} of quotes) {
+      button.setAttribute('aria-pressed', String(k === selectedStrike && type === selectedType));
+    }
+  }
+}
+function renderChain(spot, iv, days) {
+  const nearest = Math.round(spot / 50) * 50;
+  for (const {k, row, quotes} of chainRows) {
+    row.classList.toggle('near-spot', k === nearest);
+    for (const {type, button, premium, status} of quotes) {
+      premium.textContent = format.format(optionPrice(spot, k, iv, days, type));
+      status.textContent = moneyness(spot, k, type);
+      button.setAttribute('aria-label', whole.format(k) + ' ' + type + ', ' + premium.textContent + ' points, ' + status.textContent);
+    }
+  }
+  markChainSelection();
+}
 render();
+const firstSpotRow = chainRows.find(({k}) => k === Number(spotInput.defaultValue)).row;
+chainScroll.scrollTop = firstSpotRow.getBoundingClientRect().top - chainScroll.getBoundingClientRect().top - 95;
 
 </script>
 </body></html>
