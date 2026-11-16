@@ -7,7 +7,7 @@
   <meta name="description" content="Explore the Unified Diwakar’s Plate, a visual framework for options risk by Dr. Diwakar Mishra.">
   <title>Unified Diwakar’s Plate | Diwakar Options</title>
   <style>
-:root{--bg:#f7f5ef;--paper:#fffdf8;--ink:#18312d;--muted:#49615b;--line:#d7dfd2;--accent:#116e60;--dark:#102a27;--teal:#6ad9bf;--copper:#a94f30;font-family:"Instrument Sans",system-ui,sans-serif;color:var(--ink);background:var(--bg);font-variant-numeric:tabular-nums;line-height:1.55}
+:root{--bg:#f7f5ef;--paper:#fffdf8;--ink:#18312d;--muted:#49615b;--line:#d7dfd2;--accent:#116e60;--dark:#102a27;--teal:#6ad9bf;--copper:#a94f30;--plate-copper:#efaa76;--plate-nickel:#d3dedf;--plate-spot:#72edc8;font-family:"Instrument Sans",system-ui,sans-serif;color:var(--ink);background:var(--bg);font-variant-numeric:tabular-nums;line-height:1.55}
 *{box-sizing:border-box}
 body{margin:0}
 a{color:inherit}
@@ -38,14 +38,16 @@ p{color:var(--muted);margin:0 0 14px}
 .hero-visual::before{content:"";position:absolute;inset:0;background-image:repeating-linear-gradient(0deg,#caffdf0a 0 1px,transparent 1px 4px);opacity:.45}
 .visual-label,.visual-credit{position:absolute;z-index:1;font-size:.66rem;letter-spacing:.1em;left:6%;color:#bdd8cc}
 .visual-label{top:6%;font-weight:700}.visual-credit{bottom:6%}
-.orbit,.hero-ring{position:absolute;border-radius:50%;aspect-ratio:1;left:49%;top:51%;transform:translate(-50%,-50%)}
-.orbit{border:1px solid #a1c5b24f}
+.orbit,.hero-ring,.hero-metal{position:absolute;border-radius:50%;aspect-ratio:1;left:49%;top:51%;transform:translate(-50%,-50%)}
+.hero-metal.nickel{width:76%;background:radial-gradient(circle,#4d6367,#33464c 85%,#728184)}
+.hero-metal.copper{width:45%;background:radial-gradient(circle,#62462f,#9a5e3e)}
+.orbit{border:1px solid #d3dedf4d}
 .orbit-a{width:14%}.orbit-b{width:26%}.orbit-c{width:48%}.orbit-d{width:61%}.orbit-e{width:76%}
-.hero-ring{border:1px solid #d0e5d38c;width:38%}
-.hero-ring.last{width:67%;border-color:#e7b487b0}
-.hero-ring.spot{width:45%;border:2px solid #75e1bf;box-shadow:0 0 17px #79ffd777,inset 0 0 16px #79ffd72a}
+.hero-ring{border:2px solid var(--plate-copper);width:38%}
+.hero-ring.last{width:67%;border-color:var(--plate-nickel)}
+.hero-ring.spot{width:45%;border:2px solid var(--plate-spot);box-shadow:0 0 17px #79ffd777,inset 0 0 16px #79ffd72a}
 .hero-ring span{position:absolute;left:82%;top:14%;white-space:nowrap;font-size:.75rem;background:#15322d;padding:2px 5px;border-radius:3px;color:#f7efe0}
-.hero-ring.first span{top:63%;left:90%}.hero-ring.last span{top:71%;left:90%}.hero-ring.spot span{color:#a9f4da}
+.hero-ring.first span{top:63%;left:90%}.hero-ring.last span{top:83%;left:50%}.hero-ring.spot span{color:#a9f4da}
 .hero-ring small{font-size:.62em;letter-spacing:.05em}
 .section{border-top:1px solid var(--line);padding:40px 0 52px;scroll-margin-top:24px}
 .section-heading{display:flex;align-items:end;justify-content:space-between;gap:26px;margin-bottom:12px}
@@ -66,7 +68,10 @@ canvas{display:block;width:100%;height:auto}
 .legend{display:flex;gap:9px 15px;flex-wrap:wrap;font-size:.75rem;margin-top:8px;color:var(--muted)}
 .legend span{display:inline-flex;align-items:center;gap:5px}
 .legend i{width:9px;height:9px;border-radius:50%}
-.long{background:#648e77}.short{background:#b97c49}.current{background:#27a88e}
+.legend .copper{background:var(--plate-copper);border:1px solid #975132}
+.legend .nickel{background:var(--plate-nickel);border:1px solid #657a80}
+.legend .current{background:var(--plate-spot);border:1px solid #267b67}
+.leg-moneyness{display:block;color:var(--muted);font-weight:500}
 #pnl{font-size:1.23rem}.gain{color:#116e60}.loss{color:#a53d2e}
 .scenario{grid-column:2;grid-row:2}.legs{grid-column:1;grid-row:2}
 .table-scroll{overflow:auto}
@@ -114,10 +119,11 @@ th,td{padding:8px 3px;border-bottom:1px solid var(--line)}th:first-child,td:firs
       <p class="intro">See how changes in NIFTY, implied volatility and time affect an options position. Follow the moving spot ring and see how each leg contributes to profit or loss.</p>
       <div class="actions"><a class="button" href="#demo">Try the Unified Plate <span aria-hidden="true">↘</span></a></div>
     </div>
-    <div class="hero-visual" role="img" aria-label="A teal spot ring between two fixed concentric strike rings">
+    <div class="hero-visual" role="img" aria-label="NIFTY at 25,050. The copper 25,000 strike is in the money for calls and out of the money for puts. The nickel 25,200 strike is out of the money for calls and in the money for puts.">
       <span class="visual-label">FIXED STRIKES · MOVING SPOT</span>
+      <div class="hero-metal nickel" aria-hidden="true"></div><div class="hero-metal copper" aria-hidden="true"></div>
       <div class="orbit orbit-a"></div><div class="orbit orbit-b"></div><div class="orbit orbit-c"></div><div class="orbit orbit-d"></div><div class="orbit orbit-e"></div>
-      <div class="hero-ring first"><span>25,000</span></div><div class="hero-ring spot"><span>25,050 <small>SPOT</small></span></div><div class="hero-ring last"><span>25,200</span></div>
+      <div class="hero-ring first"><span>25,000 <small>ITM CALL</small></span></div><div class="hero-ring spot"><span>25,050 <small>SPOT</small></span></div><div class="hero-ring last"><span>25,200 <small>OTM CALL</small></span></div>
       <span class="visual-credit">Illustration · NIFTY 50</span>
     </div>
   </section>
@@ -137,7 +143,7 @@ th,td{padding:8px 3px;border-bottom:1px solid var(--line)}th:first-child,td:firs
       <article class="panel figure-panel">
         <div class="panel-title"><h3>The Unified Plate</h3><span class="status">Synthetic</span></div>
         <canvas id="plate" width="600" height="320" role="img" aria-label="Strike rings and scenario spot ring"></canvas>
-        <div class="legend"><span><i class="long"></i>Long 25,000 call</span><span><i class="short"></i>4 short 25,200 calls</span><span><i class="current"></i>Spot</span></div>
+        <div class="legend"><span><i class="copper" aria-hidden="true"></i>Copper · ITM calls, OTM puts</span><span><i class="nickel" aria-hidden="true"></i>Nickel · OTM calls, ITM puts</span><span><i class="current" aria-hidden="true"></i>Spot boundary · ATM</span></div>
       </article>
       <article class="panel scenario">
         <div class="panel-title"><h3>Scenario P&amp;L</h3><strong id="pnl" aria-live="polite"></strong></div>
@@ -174,6 +180,17 @@ const chartBounds = {left: 61, top: 18, right: 643, bottom: 241};
 const minSpot = +spotInput.min;
 const maxSpot = +spotInput.max;
 const rate = .06;
+const plateStyle = getComputedStyle(plate);
+const plateColors = {
+  copper: plateStyle.getPropertyValue('--plate-copper').trim(),
+  nickel: plateStyle.getPropertyValue('--plate-nickel').trim(),
+  spot: plateStyle.getPropertyValue('--plate-spot').trim()
+};
+
+function callMoneyness(spot, k) {
+  if (spot === k) return 'ATM';
+  return spot > k ? 'ITM' : 'OTM';
+}
 
 function cdf(value) {
   const z = Math.abs(value);
@@ -209,19 +226,34 @@ function drawPlate(spot) {
   const centerX = 300, centerY = 165;
   const radius = level => 25 + (level - minSpot) / (maxSpot - minSpot) * 127;
   ctx.clearRect(0, 0, plate.width, plate.height);
-  function ring(level, color, width, dashed = []) {
+  function circle(level) {
     ctx.beginPath();
     ctx.arc(centerX, centerY, radius(level), 0, Math.PI * 2);
+  }
+  function region(level, color) {
+    circle(level);
+    ctx.fillStyle = color;
+    ctx.fill();
+  }
+  function ring(level, color, width, dashed = []) {
+    circle(level);
     ctx.setLineDash(dashed);
     ctx.strokeStyle = color;
     ctx.lineWidth = width;
     ctx.stroke();
     ctx.setLineDash([]);
   }
-  for (let level = minSpot; level <= maxSpot; level += 250) ring(level, '#587b703b', 1);
-  ring(strike[0], '#8eb29a', 2);
-  ring(strike[1], '#e4a96d', 2);
-  ring(spot, '#72edc8', 2.5, [6, 4]);
+  region(maxSpot, '#34494d');
+  region(spot, '#70462e');
+  for (let level = minSpot; level <= maxSpot; level += 250) ring(level, '#d3dedf45', 1);
+  strike.forEach(k => {
+    const moneyness = callMoneyness(spot, k);
+    if (moneyness === 'ATM') return;
+    ring(k, moneyness === 'ITM' ? plateColors.copper : plateColors.nickel, 2);
+  });
+  ring(spot, plateColors.spot, 2.5, [6, 4]);
+  const callLabels = strike.map(k => whole.format(k) + ' call ' + callMoneyness(spot, k));
+  plate.setAttribute('aria-label', 'NIFTY spot ' + whole.format(spot) + '. ' + callLabels.join('. ') + '.');
   ctx.fillStyle = '#ebf8ed';
   ctx.font = '600 22px system-ui';
   ctx.textAlign = 'center';
@@ -293,6 +325,10 @@ function render() {
     const label = document.createElement('th');
     label.scope = 'row';
     label.textContent = (i === 0 ? '+1 × ' : '−4 × ') + whole.format(strike[i]);
+    const moneyness = document.createElement('small');
+    moneyness.className = 'leg-moneyness';
+    moneyness.textContent = callMoneyness(spot, strike[i]);
+    label.append(moneyness);
     row.append(label);
     [leg.intrinsic,leg.extrinsic,leg.pnl].forEach(value => {
       const cell = document.createElement('td');
