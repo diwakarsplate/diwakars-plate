@@ -138,19 +138,29 @@ th,td{padding:8px 3px;border-bottom:1px solid var(--line)}th:first-child,td:firs
     </div>
   </section>
   <section class="section" id="demo">
-    <div class="section-heading"><div><p class="eyebrow">INTERACTIVE EXAMPLE</p><h2>Explore a 1:4 call ratio spread</h2></div><p>Synthetic NIFTY example. P&amp;L is in index points for the stated position. The four short calls leave the spread exposed to unlimited upside losses.</p></div>
+    <div class="section-heading"><div><p class="eyebrow">INTERACTIVE EXAMPLE</p><h2>Build a NIFTY call spread</h2></div><p id="position-risk" aria-live="polite"></p></div>
     <div class="demo-grid">
       <article class="panel inputs">
         <div class="panel-title"><h3>Scenario inputs</h3><button type="button" id="reset">Reset</button></div>
         <form id="strike-form" class="strike-form">
           <fieldset>
-            <legend>Choose your strikes</legend>
+            <legend>Choose strikes and lots</legend>
             <div class="strike-fields">
-              <div><label for="long-strike">Buy 1 call</label><input id="long-strike" type="number" inputmode="numeric" min="23500" max="26500" step="1" value="25000" required aria-describedby="strike-help"></div>
-              <div><label for="short-strike">Sell 4 calls</label><input id="short-strike" type="number" inputmode="numeric" min="23500" max="26500" step="1" value="25200" required aria-describedby="strike-help"></div>
+              <div>
+                <label for="long-strike">Buy call strike</label>
+                <input id="long-strike" type="number" inputmode="numeric" min="23500" max="26500" step="1" value="25000" required aria-describedby="strike-help">
+                <label for="long-lots">Lots to buy</label>
+                <input id="long-lots" type="number" inputmode="numeric" min="1" step="1" value="1" required>
+              </div>
+              <div>
+                <label for="short-strike">Sell call strike</label>
+                <input id="short-strike" type="number" inputmode="numeric" min="23500" max="26500" step="1" value="25200" required aria-describedby="strike-help">
+                <label for="short-lots">Lots to sell</label>
+                <input id="short-lots" type="number" inputmode="numeric" min="1" step="1" value="4" required>
+              </div>
             </div>
             <p id="strike-help" class="fine">Enter whole strikes from 23,500 to 26,500. The buy strike must be lower.</p>
-            <button class="apply-strikes" type="submit">Apply strikes</button>
+            <button class="apply-strikes" type="submit">Apply position</button>
             <p id="strike-status" class="strike-status" role="status"></p>
           </fieldset>
         </form>
@@ -170,7 +180,7 @@ th,td{padding:8px 3px;border-bottom:1px solid var(--line)}th:first-child,td:firs
       <article class="panel scenario">
         <div class="panel-title"><h3>Scenario P&amp;L</h3><strong id="pnl" aria-live="polite"></strong></div>
         <canvas id="chart" width="660" height="280" role="img" aria-label="Scenario profit and loss across NIFTY spot levels"></canvas>
-        <p class="fine"><span id="roots"></span> Click the chart or use the spot slider to inspect another level.</p>
+        <p class="fine"><span id="roots"></span> Click the chart or use the spot slider to inspect another level. P&amp;L is shown in lot-weighted index points, before applying the contract lot size.</p>
       </article>
       <article class="panel legs">
         <div class="panel-title"><h3>Position breakdown</h3></div>
@@ -188,15 +198,17 @@ th,td{padding:8px 3px;border-bottom:1px solid var(--line)}th:first-child,td:firs
 <footer class="wrap footer"><span>Diwakar Options · Dr. Diwakar Mishra</span><a href="origins.html">The original Plate →</a></footer>
 <script>
 'use strict';
-const quantity = [1, -4];
 const format = new Intl.NumberFormat('en-IN', {maximumFractionDigits: 2, minimumFractionDigits: 2});
 const whole = new Intl.NumberFormat('en-IN', {maximumFractionDigits: 0});
 const get = id => document.getElementById(id);
 const strikeForm = get('strike-form');
 const longStrikeInput = get('long-strike');
 const shortStrikeInput = get('short-strike');
+const longLotsInput = get('long-lots');
+const shortLotsInput = get('short-lots');
+const lotInputs = [longLotsInput, shortLotsInput];
 const strikeStatus = get('strike-status');
-const strike = [longStrikeInput.valueAsNumber, shortStrikeInput.valueAsNumber];
+let strike, quantity;
 const spotInput = get('spot');
 const ivInput = get('iv');
 const daysInput = get('days');
@@ -238,7 +250,14 @@ function entryValues() {
   const days = Number(daysInput.defaultValue);
   return strike.map((k, i) => quantity[i] * call(spot, k, iv, days));
 }
-let entry = entryValues();
+let entry;
+function applyPosition() {
+  strike = [longStrikeInput.valueAsNumber, shortStrikeInput.valueAsNumber];
+  quantity = [longLotsInput.valueAsNumber, -shortLotsInput.valueAsNumber];
+  entry = entryValues();
+  renderPositionRisk();
+}
+applyPosition();
 function position(spot, iv, days) {
   return strike.map((k, i) => {
     const marketValue = quantity[i] * call(spot, k, iv, days);
@@ -284,7 +303,8 @@ function drawPlate(spot) {
     ring(k, moneyness === 'ITM' ? plateColors.copper : plateColors.nickel, 2);
   });
   ring(spot, plateColors.spot, 2.5, [6, 4]);
-  const callLabels = strike.map(k => whole.format(k) + ' call ' + callMoneyness(spot, k));
+  const callLabels = strike.map((k, i) =>
+    (i === 0 ? 'Buy ' : 'Sell ') + whole.format(Math.abs(quantity[i])) + ' lots at ' + whole.format(k) + ', ' + callMoneyness(spot, k));
   plate.setAttribute('aria-label', 'NIFTY spot ' + whole.format(spot) + '. ' + callLabels.join('. ') + '.');
   ctx.fillStyle = '#ebf8ed';
   ctx.font = '600 22px system-ui';
@@ -312,7 +332,8 @@ function drawChart(spot, iv, days, pnl) {
     ctx.beginPath(); ctx.moveTo(left, y(value)); ctx.lineTo(right, y(value));
     ctx.strokeStyle = '#dde6db'; ctx.lineWidth = 1; ctx.stroke();
     ctx.textAlign = 'right'; ctx.textBaseline = 'middle'; ctx.fillStyle = '#51685e';
-    ctx.fillText(whole.format(value), left - 7, y(value));
+    const tick = Math.abs(value) >= 100000 ? value.toExponential(1) : whole.format(value);
+    ctx.fillText(tick, left - 7, y(value));
   }
   ctx.beginPath(); ctx.moveTo(left, y(0)); ctx.lineTo(right, y(0));
   ctx.strokeStyle = '#657f72'; ctx.setLineDash([4, 4]); ctx.stroke(); ctx.setLineDash([]);
@@ -341,6 +362,16 @@ function drawChart(spot, iv, days, pnl) {
   if (samples.at(-1)[1] === 0) roots.push(maxSpot);
   get('roots').textContent = roots.length ? 'Break-even in this range: ' + roots.map(s => format.format(s)).join(', ') + '.' : 'No break-even in the displayed spot range.';
 }
+function renderPositionRisk() {
+  const netLots = quantity[0] + quantity[1];
+  if (netLots < 0) {
+    get('position-risk').textContent = 'With more short than long calls, losses can grow without limit as NIFTY rises.';
+  } else if (netLots === 0) {
+    get('position-risk').textContent = 'With equal lots, expiry P&L stays flat once NIFTY is above the sell strike.';
+  } else {
+    get('position-risk').textContent = 'With more long than short calls, expiry P&L rises as NIFTY moves above the sell strike.';
+  }
+}
 function render() {
   const spot = +spotInput.value, days = +daysInput.value, iv = +ivInput.value / 100;
   get('spot-value').textContent = whole.format(spot);
@@ -359,7 +390,7 @@ function render() {
     const row = document.createElement('tr');
     const label = document.createElement('th');
     label.scope = 'row';
-    label.textContent = (i === 0 ? '+1 × ' : '−4 × ') + whole.format(strike[i]);
+    label.textContent = (i === 0 ? '+' : '−') + whole.format(Math.abs(quantity[i])) + ' × ' + whole.format(strike[i]);
     const moneyness = document.createElement('small');
     moneyness.className = 'leg-moneyness';
     moneyness.textContent = callMoneyness(spot, strike[i]);
@@ -381,6 +412,10 @@ function render() {
   shortStrikeInput.setCustomValidity('');
   strikeStatus.textContent = '';
 }));
+lotInputs.forEach(input => input.addEventListener('input', () => {
+  input.setCustomValidity('');
+  strikeStatus.textContent = '';
+}));
 strikeForm.addEventListener('submit', event => {
   event.preventDefault();
   const longStrike = longStrikeInput.valueAsNumber;
@@ -390,19 +425,22 @@ strikeForm.addEventListener('submit', event => {
     shortStrikeInput.reportValidity();
     return;
   }
-  strike[0] = longStrike;
-  strike[1] = shortStrike;
-  entry = entryValues();
+  const invalidLots = lotInputs.find(input => !Number.isSafeInteger(input.valueAsNumber) || input.valueAsNumber < 1);
+  if (invalidLots) {
+    invalidLots.setCustomValidity('Enter a positive whole number of lots within the supported range.');
+    invalidLots.reportValidity();
+    return;
+  }
+  applyPosition();
   render();
-  strikeStatus.textContent = 'Applied: buy ' + whole.format(longStrike) + ', sell ' + whole.format(shortStrike) + '.';
+  strikeStatus.textContent = 'Applied ' + whole.format(quantity[0]) + ' buy lots and ' + whole.format(-quantity[1]) + ' sell lots.';
 });
 get('reset').addEventListener('click', () => {
   strikeForm.reset();
   shortStrikeInput.setCustomValidity('');
   strikeStatus.textContent = '';
-  strike[0] = longStrikeInput.valueAsNumber;
-  strike[1] = shortStrikeInput.valueAsNumber;
-  entry = entryValues();
+  lotInputs.forEach(input => input.setCustomValidity(''));
+  applyPosition();
   [spotInput,ivInput,daysInput].forEach(input => {input.value = input.defaultValue;});
   render();
 });
