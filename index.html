@@ -58,6 +58,16 @@ p{color:var(--muted);margin:0 0 14px}
 .panel button{border:0;padding:3px 7px;background:#edf3eb;color:var(--accent);border-radius:4px;cursor:pointer;font:inherit;font-size:.82rem}
 .inputs label{display:flex;justify-content:space-between;margin:11px 0 3px;font-size:.9rem}
 .inputs output,.data-row strong{font-weight:720}
+.strike-form{border-bottom:1px solid var(--line);padding-bottom:12px;margin-bottom:12px}
+.strike-form fieldset{border:0;margin:0;padding:0;min-width:0}
+.strike-form legend{font-size:.86rem;font-weight:720;padding:0}
+.strike-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.strike-fields label{display:block;margin:6px 0 3px;font-size:.78rem}
+.strike-fields input{width:100%;min-width:0;padding:6px;border:1px solid #8d9d90;border-radius:4px;background:white;color:var(--ink);font:inherit;font-size:1rem}
+.strike-form .apply-strikes{margin-top:8px;padding:6px 10px;background:var(--accent);color:white;font-weight:720}
+.strike-form .apply-strikes:hover{background:#0b5b50}
+.strike-status{margin:6px 0 0;font-size:.78rem}
+.strike-status:empty{display:none}
 input[type=range]{width:100%;accent-color:var(--accent);margin:0 0 4px}
 .data-row{display:flex;justify-content:space-between;gap:10px;font-size:.82rem;padding-top:6px}
 .fine{font-size:.78rem;margin:10px 0 0}
@@ -132,12 +142,24 @@ th,td{padding:8px 3px;border-bottom:1px solid var(--line)}th:first-child,td:firs
     <div class="demo-grid">
       <article class="panel inputs">
         <div class="panel-title"><h3>Scenario inputs</h3><button type="button" id="reset">Reset</button></div>
-        <label for="spot">NIFTY spot <output id="spot-value" for="spot"></output></label><input id="spot" type="range" min="23500" max="26500" step="25" value="25050">
+        <form id="strike-form" class="strike-form">
+          <fieldset>
+            <legend>Choose your strikes</legend>
+            <div class="strike-fields">
+              <div><label for="long-strike">Buy 1 call</label><input id="long-strike" type="number" inputmode="numeric" min="23500" max="26500" step="1" value="25000" required aria-describedby="strike-help"></div>
+              <div><label for="short-strike">Sell 4 calls</label><input id="short-strike" type="number" inputmode="numeric" min="23500" max="26500" step="1" value="25200" required aria-describedby="strike-help"></div>
+            </div>
+            <p id="strike-help" class="fine">Enter whole strikes from 23,500 to 26,500. The buy strike must be lower.</p>
+            <button class="apply-strikes" type="submit">Apply strikes</button>
+            <p id="strike-status" class="strike-status" role="status"></p>
+          </fieldset>
+        </form>
+        <label for="spot">NIFTY spot <output id="spot-value" for="spot"></output></label><input id="spot" type="range" min="23500" max="26500" step="1" value="25050">
         <label for="iv">Implied volatility <output id="iv-value" for="iv"></output></label><input id="iv" type="range" min="8" max="35" step=".5" value="15">
         <label for="days">Days to expiry <output id="days-value" for="days"></output></label><input id="days" type="range" min="0" max="7" step="1" value="7">
         <div class="data-row"><span>Entry spot / IV</span><strong>25,050 / 15%</strong></div>
         <div class="data-row"><span>Entry time to expiry</span><strong>7 days</strong></div>
-        <div class="data-row"><span>Entry credit</span><strong id="entry"></strong></div>
+        <div class="data-row"><span id="entry-label">Model entry</span><strong id="entry"></strong></div>
         <p class="fine">European Black–Scholes–Merton repricing, 6% continuous rate, zero yield, common IV across strikes.</p>
       </article>
       <article class="panel figure-panel">
@@ -166,11 +188,15 @@ th,td{padding:8px 3px;border-bottom:1px solid var(--line)}th:first-child,td:firs
 <footer class="wrap footer"><span>Diwakar Options · Dr. Diwakar Mishra</span><a href="origins.html">The original Plate →</a></footer>
 <script>
 'use strict';
-const strike = [25000, 25200];
 const quantity = [1, -4];
 const format = new Intl.NumberFormat('en-IN', {maximumFractionDigits: 2, minimumFractionDigits: 2});
 const whole = new Intl.NumberFormat('en-IN', {maximumFractionDigits: 0});
 const get = id => document.getElementById(id);
+const strikeForm = get('strike-form');
+const longStrikeInput = get('long-strike');
+const shortStrikeInput = get('short-strike');
+const strikeStatus = get('strike-status');
+const strike = [longStrikeInput.valueAsNumber, shortStrikeInput.valueAsNumber];
 const spotInput = get('spot');
 const ivInput = get('iv');
 const daysInput = get('days');
@@ -206,7 +232,13 @@ function call(spot, k, iv, days) {
   const d1 = (Math.log(spot / k) + (rate + iv*iv/2) * tau) / sd;
   return spot * cdf(d1) - k * Math.exp(-rate * tau) * cdf(d1 - sd);
 }
-const entry = strike.map((k, i) => quantity[i] * call(25050, k, .15, 7));
+function entryValues() {
+  const spot = Number(spotInput.defaultValue);
+  const iv = Number(ivInput.defaultValue) / 100;
+  const days = Number(daysInput.defaultValue);
+  return strike.map((k, i) => quantity[i] * call(spot, k, iv, days));
+}
+let entry = entryValues();
 function position(spot, iv, days) {
   return strike.map((k, i) => {
     const marketValue = quantity[i] * call(spot, k, iv, days);
@@ -265,10 +297,9 @@ function drawPlate(spot) {
 function drawChart(spot, iv, days, pnl) {
   const ctx = chart.getContext('2d');
   const {left, right, top, bottom} = chartBounds;
-  const samples = Array.from({length: 181}, (_, i) => {
-    const s = minSpot + (maxSpot - minSpot) * i / 180;
-    return [s, totalAt(s, iv, days)];
-  });
+  const grid = Array.from({length: 181}, (_, i) => minSpot + (maxSpot - minSpot) * i / 180);
+  const levels = [...new Set([...grid, ...strike, spot])].sort((a, b) => a - b);
+  const samples = levels.map(s => [s, totalAt(s, iv, days)]);
   const values = samples.map(row => row[1]);
   const lo = Math.floor(Math.min(0, ...values) / 500) * 500 - 100;
   const hi = Math.ceil(Math.max(0, ...values) / 500) * 500 + 100;
@@ -315,7 +346,11 @@ function render() {
   get('spot-value').textContent = whole.format(spot);
   get('iv-value').textContent = (iv * 100).toFixed(1) + '%';
   get('days-value').textContent = days;
-  get('entry').textContent = format.format(-entry[0]-entry[1]) + ' pts';
+  const entryCashFlow = -entry[0] - entry[1];
+  get('entry-label').textContent = Math.abs(entryCashFlow) < .005
+    ? 'Model entry'
+    : (entryCashFlow > 0 ? 'Model entry credit' : 'Model entry debit');
+  get('entry').textContent = format.format(Math.abs(entryCashFlow)) + ' pts';
   const current = position(spot, iv, days);
   const pnl = current.reduce((sum, leg) => sum + leg.pnl, 0);
   get('pnl').textContent = signed(pnl) + ' pts';
@@ -342,7 +377,32 @@ function render() {
   drawChart(spot, iv, days, pnl);
 }
 [spotInput,ivInput,daysInput].forEach(input => input.addEventListener('input', render));
+[longStrikeInput, shortStrikeInput].forEach(input => input.addEventListener('input', () => {
+  shortStrikeInput.setCustomValidity('');
+  strikeStatus.textContent = '';
+}));
+strikeForm.addEventListener('submit', event => {
+  event.preventDefault();
+  const longStrike = longStrikeInput.valueAsNumber;
+  const shortStrike = shortStrikeInput.valueAsNumber;
+  if (longStrike >= shortStrike) {
+    shortStrikeInput.setCustomValidity('Enter a sell strike above the buy strike.');
+    shortStrikeInput.reportValidity();
+    return;
+  }
+  strike[0] = longStrike;
+  strike[1] = shortStrike;
+  entry = entryValues();
+  render();
+  strikeStatus.textContent = 'Applied: buy ' + whole.format(longStrike) + ', sell ' + whole.format(shortStrike) + '.';
+});
 get('reset').addEventListener('click', () => {
+  strikeForm.reset();
+  shortStrikeInput.setCustomValidity('');
+  strikeStatus.textContent = '';
+  strike[0] = longStrikeInput.valueAsNumber;
+  strike[1] = shortStrikeInput.valueAsNumber;
+  entry = entryValues();
   [spotInput,ivInput,daysInput].forEach(input => {input.value = input.defaultValue;});
   render();
 });
