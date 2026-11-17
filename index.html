@@ -88,6 +88,10 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:0 0 4px}
 .status{font-size:.72rem;color:var(--muted)}
 canvas{display:block;width:100%;height:auto}
 #plate{border-radius:5px;background:var(--dark)}
+.figure-panel .panel-title{flex-wrap:wrap}
+.plate-actions{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
+.plate-actions #plate-zoom{padding:5px 9px;font-weight:700}
+.plate-actions #plate-zoom[aria-pressed=true]{background:var(--accent);color:#fff}
 #chart{cursor:crosshair}
 .legend{display:flex;gap:9px 15px;flex-wrap:wrap;font-size:.75rem;margin-top:8px;color:var(--muted)}
 .legend span{display:inline-flex;align-items:center;gap:5px}
@@ -212,7 +216,10 @@ th,td{padding:8px 3px;border-bottom:1px solid var(--line)}th:first-child,td:firs
         <p class="fine">European Black–Scholes–Merton repricing, 6% continuous rate, zero yield, common IV across strikes.</p>
       </article>
       <article class="panel figure-panel">
-        <div class="panel-title"><h3>The Unified Plate</h3><span class="status">Synthetic</span></div>
+        <div class="panel-title">
+          <h3>The Unified Plate</h3>
+          <div class="plate-actions"><span class="status">Synthetic</span><button id="plate-zoom" type="button" aria-controls="plate" aria-pressed="false">Zoom payoff sector</button></div>
+        </div>
         <canvas id="plate" width="480" height="320" role="img" aria-label="Strike rings, spot ring and expiry payoff strip" aria-describedby="payoff-help"></canvas>
         <div class="legend"><span><i class="copper" aria-hidden="true"></i>Copper · ITM calls, OTM puts</span><span><i class="nickel" aria-hidden="true"></i>Nickel · OTM calls, ITM puts</span><span><i class="current" aria-hidden="true"></i>Spot boundary · ATM</span></div>
         <div class="payoff-key">
@@ -259,6 +266,7 @@ const ivInput = get('iv');
 const daysInput = get('days');
 const chart = get('chart');
 const plate = get('plate');
+const plateZoom = get('plate-zoom');
 const chartBounds = {left: 61, top: 18, right: 643, bottom: 241};
 const minSpot = +spotInput.min;
 const maxSpot = +spotInput.max;
@@ -354,9 +362,9 @@ function payoffColor(value, scale) {
   const rgb = neutral.map((channel, i) => Math.round(channel + (endpoint[i] - channel) * strength));
   return 'rgb(' + rgb.join(', ') + ')';
 }
-function drawPayoffStrip(ctx, xForLevel, y, spot) {
+function drawPayoffStrip(ctx, xForLevel, y, spot, zoomed) {
   const left = xForLevel(minSpot), right = xForLevel(maxSpot);
-  const barHeight = 8;
+  const barHeight = zoomed ? 10 : 8;
   const stops = expiryPayoffStops();
   const scale = Math.max(...stops.map(stop => Math.abs(stop.value)));
   const gradient = ctx.createLinearGradient(left, y, right, y);
@@ -398,9 +406,21 @@ function drawPayoffStrip(ctx, xForLevel, y, spot) {
 }
 function drawPlate(spot) {
   const ctx = plate.getContext('2d');
-  const centerX = plate.width / 2, centerY = 165;
-  const radius = level => 25 + (level - minSpot) / (maxSpot - minSpot) * 127;
+  const zoomed = plateZoom.getAttribute('aria-pressed') === 'true';
+  const centerX = zoomed ? 48 : plate.width / 2;
+  const centerY = 165;
+  const scale = zoomed ? 2.5 : 1;
+  const radius = level => scale * (25 + (level - minSpot) / (maxSpot - minSpot) * 127);
   ctx.clearRect(0, 0, plate.width, plate.height);
+  if (zoomed) {
+    const halfAngle = Math.PI / 8;
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(centerX, centerY);
+    ctx.arc(centerX, centerY, radius(maxSpot) + 2, -halfAngle, halfAngle);
+    ctx.closePath();
+    ctx.clip();
+  }
   function circle(level) {
     ctx.beginPath();
     ctx.arc(centerX, centerY, radius(level), 0, Math.PI * 2);
@@ -425,18 +445,22 @@ function drawPlate(spot) {
     if (k !== spot) ring(k, k < spot ? plateColors.copper : plateColors.nickel, 2);
   }
   ring(spot, plateColors.spot, 2.5, [6, 4]);
-  drawPayoffStrip(ctx, level => centerX + radius(level), centerY, spot);
+  if (zoomed) ctx.restore();
+  drawPayoffStrip(ctx, level => centerX + radius(level), centerY, spot, zoomed);
   const payoff = signed(expiryPayoff(spot)) + ' pts';
   get('expiry-payoff').textContent = payoff;
   const legLabels = strike.map((k, i) => describeLeg(i) + ', ' + moneyness(spot, k, optionTypes[i]));
-  plate.setAttribute('aria-label', 'NIFTY spot ' + whole.format(spot) + '. ' + legLabels.join('. ') + '. Expiry payoff at selected spot ' + payoff + '.');
+  const view = zoomed ? 'Magnified payoff sector. ' : 'Full Plate. ';
+  plate.setAttribute('aria-label', view + 'NIFTY spot ' + whole.format(spot) + '. ' + legLabels.join('. ') + '. Expiry payoff at selected spot ' + payoff + '.');
+  const labelX = plate.width / 2;
+  const labelY = zoomed ? 30 : centerY - 31;
   ctx.fillStyle = '#ebf8ed';
   ctx.font = '600 22px system-ui';
   ctx.textAlign = 'center';
-  ctx.fillText(whole.format(spot), centerX, centerY - 31);
+  ctx.fillText(whole.format(spot), labelX, labelY);
   ctx.font = '13px system-ui';
   ctx.fillStyle = '#aed3c3';
-  ctx.fillText('NIFTY SPOT', centerX, centerY - 12);
+  ctx.fillText('NIFTY SPOT', labelX, labelY + 19);
 }
 function drawChart(spot, iv, days, pnl) {
   const ctx = chart.getContext('2d');
@@ -542,6 +566,11 @@ function render() {
   drawChart(spot, iv, days, pnl);
   renderChain(spot, iv, days);
 }
+plateZoom.addEventListener('click', () => {
+  const zoomed = plateZoom.getAttribute('aria-pressed') === 'true';
+  plateZoom.setAttribute('aria-pressed', String(!zoomed));
+  drawPlate(Number(spotInput.value));
+});
 [spotInput,ivInput,daysInput].forEach(input => input.addEventListener('input', render));
 [...strikeInputs, ...typeInputs].forEach(input => input.addEventListener('input', () => {
   strikeStatus.textContent = '';
