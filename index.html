@@ -99,7 +99,13 @@ canvas{display:block;width:100%;height:auto}
 .legend .copper{background:var(--plate-copper);border:1px solid #975132}
 .legend .nickel{background:var(--plate-nickel);border:1px solid #657a80}
 .legend .current{background:var(--plate-spot);border:1px solid #267b67}
-.payoff-key{border-top:1px solid var(--line);padding-top:8px;margin-top:12px}
+.payoff-key,.premiometer{border-top:1px solid var(--line);padding-top:8px;margin-top:12px}
+.premiometer-head{display:flex;align-items:center;flex-wrap:wrap;gap:6px 10px;font-size:.83rem}
+.premiometer-head select{max-width:100%;border:1px solid var(--line);border-radius:4px;background:var(--paper);color:var(--ink);font:inherit;padding:4px}
+.premiometer-values{display:flex;gap:6px 18px;flex-wrap:wrap;margin:6px 0 0;font-size:.8rem}
+.premiometer-values dt{color:var(--muted)}
+.premiometer-values dd{margin:0;font-weight:700}
+#premiometer-note{margin:6px 0 0}
 .payoff-title{display:flex;flex-wrap:wrap;justify-content:space-between;gap:4px 12px;font-size:.83rem}
 .payoff-key .legend{margin-top:5px}
 .payoff-key .fine{margin-top:5px}
@@ -222,6 +228,15 @@ th,td{padding:8px 3px;border-bottom:1px solid var(--line)}th:first-child,td:firs
         </div>
         <canvas id="plate" width="480" height="320" role="img" aria-label="Strike rings, spot ring and expiry payoff strip" aria-describedby="payoff-help"></canvas>
         <div class="legend"><span><i class="copper" aria-hidden="true"></i>Copper · ITM calls, OTM puts</span><span><i class="nickel" aria-hidden="true"></i>Nickel · OTM calls, ITM puts</span><span><i class="current" aria-hidden="true"></i>Spot boundary · ATM</span></div>
+        <section class="premiometer" id="premiometer" hidden>
+          <div class="premiometer-head"><label for="premiometer-leg"><strong>Premiometer</strong></label><select id="premiometer-leg"><option value="0">Leg 1</option><option value="1">Leg 2</option></select></div>
+          <dl class="premiometer-values">
+            <div><dt>Intrinsic</dt><dd id="premiometer-intrinsic"></dd></div>
+            <div><dt>Extrinsic</dt><dd id="premiometer-extrinsic"></dd></div>
+            <div><dt>Premium</dt><dd id="premiometer-premium"></dd></div>
+          </dl>
+          <p class="fine" id="premiometer-note"></p>
+        </section>
         <div class="payoff-key">
           <div class="payoff-title"><strong>Expiry payoff</strong><span>At selected spot <strong id="expiry-payoff"></strong></span></div>
           <div class="legend"><span><i class="payoff-loss" aria-hidden="true"></i>Loss</span><span><i class="payoff-zero" aria-hidden="true"></i>Break-even</span><span><i class="payoff-gain" aria-hidden="true"></i>Profit</span></div>
@@ -267,6 +282,7 @@ const daysInput = get('days');
 const chart = get('chart');
 const plate = get('plate');
 const plateZoom = get('plate-zoom');
+const premiometerLeg = get('premiometer-leg');
 const chartBounds = {left: 61, top: 18, right: 643, bottom: 241};
 const minSpot = +spotInput.min;
 const maxSpot = +spotInput.max;
@@ -404,7 +420,69 @@ function drawPayoffStrip(ctx, xForLevel, y, spot, zoomed) {
   ctx.fillText(whole.format(minSpot), left, y + 33);
   ctx.fillText(whole.format(maxSpot), right, y + 33);
 }
-function drawPlate(spot) {
+function drawStrikeLabels(ctx, xForLevel, y) {
+  const strikes = [...new Set(strike)].sort((a, b) => a - b);
+  const stagger = strikes.length === 2 && xForLevel(strikes[1]) - xForLevel(strikes[0]) < 57;
+  ctx.font = '600 13px system-ui';
+  ctx.textAlign = 'center';
+  strikes.forEach((k, i) => {
+    const x = xForLevel(k);
+    const labelY = y + (stagger && i === 1 ? 78 : 59);
+    const tickTop = y + (k - minSpot < 250 || maxSpot - k < 250 ? 39 : 12);
+    ctx.beginPath();
+    ctx.moveTo(x, tickTop);
+    ctx.lineTo(x, labelY - 13);
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = '#d4e2dc88';
+    ctx.stroke();
+    ctx.fillStyle = '#f0f5ee';
+    ctx.fillText(whole.format(k), x, labelY);
+  });
+}
+function drawPremiometer(ctx, xForLevel, y, spot, iv, days) {
+  const leg = Number(premiometerLeg.value);
+  const readings = strike.map((k, i) => ({
+    intrinsic: intrinsicValue(spot, k, optionTypes[i]),
+    premium: optionPrice(spot, k, iv, days, optionTypes[i])
+  }));
+  const {intrinsic, premium} = readings[leg];
+  const extrinsic = premium - intrinsic;
+  const x = xForLevel(strike[leg]);
+  const base = y - 7;
+  const scale = 96 / Math.max(320, ...readings.flatMap(value => [value.intrinsic, value.premium]));
+  const intrinsicY = base - intrinsic * scale;
+  const premiumY = base - premium * scale;
+  const call = optionTypes[leg] === 'call';
+  const dark = call ? '#9560d5' : '#288f89';
+  const light = call ? '#d5b7fb' : '#92ded6';
+  const buy = quantity[leg] > 0;
+  const cap = buy ? '#448bff' : '#ff555a';
+
+  ctx.fillStyle = '#e6f0eb';
+  ctx.fillRect(x - 1, base, 2, y - base);
+  ctx.fillStyle = dark;
+  ctx.fillRect(x - 7, intrinsicY, 14, base - intrinsicY);
+  ctx.fillStyle = light;
+  if (extrinsic >= 0) {
+    ctx.fillRect(x - 7, premiumY, 14, intrinsicY - premiumY);
+  } else {
+    // Show the deduction alongside the full intrinsic reading.
+    ctx.fillRect(x + 9, intrinsicY, 4, premiumY - intrinsicY);
+  }
+  ctx.fillStyle = cap;
+  ctx.fillRect(x - 8, premiumY - 4, 16, 4);
+
+  const intrinsicText = format.format(intrinsic);
+  const extrinsicText = extrinsic <= -.005 ? signed(extrinsic) : format.format(Math.abs(extrinsic));
+  const premiumText = format.format(premium);
+  get('premiometer-intrinsic').textContent = intrinsicText;
+  get('premiometer-extrinsic').textContent = extrinsicText;
+  get('premiometer-premium').textContent = premiumText;
+  get('premiometer-note').textContent = 'Points per unit. ' + (call ? 'Purple call body. ' : 'Teal put body. ') + (buy ? 'Blue buy cap.' : 'Red sell cap.')
+    + (extrinsic <= -.005 ? ' The light side bar shows the extrinsic deduction.' : ' Dark shows intrinsic and light shows extrinsic.');
+  return ' Premiometer for ' + describeLeg(leg) + '. Intrinsic ' + intrinsicText + ', extrinsic ' + extrinsicText + ', premium ' + premiumText + ' points per unit.';
+}
+function drawPlate(spot, iv, days) {
   const ctx = plate.getContext('2d');
   const zoomed = plateZoom.getAttribute('aria-pressed') === 'true';
   const centerX = zoomed ? 48 : plate.width / 2;
@@ -446,12 +524,16 @@ function drawPlate(spot) {
   }
   ring(spot, plateColors.spot, 2.5, [6, 4]);
   if (zoomed) ctx.restore();
-  drawPayoffStrip(ctx, level => centerX + radius(level), centerY, spot, zoomed);
+  const xForLevel = level => centerX + radius(level);
+  get('premiometer').hidden = !zoomed;
+  const premiometerSummary = zoomed ? drawPremiometer(ctx, xForLevel, centerY, spot, iv, days) : '';
+  drawPayoffStrip(ctx, xForLevel, centerY, spot, zoomed);
+  if (zoomed) drawStrikeLabels(ctx, xForLevel, centerY);
   const payoff = signed(expiryPayoff(spot)) + ' pts';
   get('expiry-payoff').textContent = payoff;
   const legLabels = strike.map((k, i) => describeLeg(i) + ', ' + moneyness(spot, k, optionTypes[i]));
   const view = zoomed ? 'Magnified payoff sector. ' : 'Full Plate. ';
-  plate.setAttribute('aria-label', view + 'NIFTY spot ' + whole.format(spot) + '. ' + legLabels.join('. ') + '. Expiry payoff at selected spot ' + payoff + '.');
+  plate.setAttribute('aria-label', view + 'NIFTY spot ' + whole.format(spot) + '. ' + legLabels.join('. ') + '. Expiry payoff at selected spot ' + payoff + '.' + premiometerSummary);
   const labelX = plate.width / 2;
   const labelY = zoomed ? 30 : centerY - 31;
   ctx.fillStyle = '#ebf8ed';
@@ -562,14 +644,20 @@ function render() {
     return row;
   });
   get('legs').replaceChildren(...rows);
-  drawPlate(spot);
+  for (let i = 0; i < strike.length; i++) {
+    premiometerLeg.options[i].textContent = 'Leg ' + (i + 1) + ' · ' + describeLeg(i);
+  }
+  drawPlate(spot, iv, days);
   drawChart(spot, iv, days, pnl);
   renderChain(spot, iv, days);
 }
 plateZoom.addEventListener('click', () => {
   const zoomed = plateZoom.getAttribute('aria-pressed') === 'true';
   plateZoom.setAttribute('aria-pressed', String(!zoomed));
-  drawPlate(Number(spotInput.value));
+  drawPlate(Number(spotInput.value), Number(ivInput.value) / 100, Number(daysInput.value));
+});
+premiometerLeg.addEventListener('change', () => {
+  drawPlate(Number(spotInput.value), Number(ivInput.value) / 100, Number(daysInput.value));
 });
 [spotInput,ivInput,daysInput].forEach(input => input.addEventListener('input', render));
 [...strikeInputs, ...typeInputs].forEach(input => input.addEventListener('input', () => {
