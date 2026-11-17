@@ -446,7 +446,7 @@ function drawPremiometer(ctx, xForLevel, y, spot, iv, days) {
     return {intrinsic, premium, extrinsic: premium - intrinsic};
   });
   const legs = premiometerLeg.value === 'both' ? [0, 1] : [Number(premiometerLeg.value)];
-  const scale = 96 / Math.max(320, ...readings.flatMap(value => [value.intrinsic, value.premium]));
+  const scale = 24 / Math.max(320, ...readings.flatMap(value => [value.intrinsic, value.premium]));
   const texts = {intrinsic: [], extrinsic: [], premium: []};
   const descriptions = [];
   for (const leg of legs) {
@@ -462,21 +462,21 @@ function drawPremiometer(ctx, xForLevel, y, spot, iv, days) {
     const cap = quantity[leg] > 0 ? '#448bff' : '#ff555a';
 
     ctx.fillStyle = '#e6f0eb';
-    ctx.fillRect(x - 1, Math.min(base, y), 2, Math.abs(y - base));
+    ctx.fillRect(x - .5, Math.min(base, y), 1, Math.abs(y - base));
     ctx.fillStyle = dark;
-    ctx.fillRect(x - 7, Math.min(intrinsicY, base), 14, Math.abs(base - intrinsicY));
+    ctx.fillRect(x - 2, Math.min(intrinsicY, base), 4, Math.abs(base - intrinsicY));
     ctx.fillStyle = light;
     if (extrinsic >= 0) {
-      ctx.fillRect(x - 7, Math.min(premiumY, intrinsicY), 14, Math.abs(intrinsicY - premiumY));
+      ctx.fillRect(x - 2, Math.min(premiumY, intrinsicY), 4, Math.abs(intrinsicY - premiumY));
     } else {
-      ctx.fillRect(x + 9, Math.min(intrinsicY, premiumY), 4, Math.abs(premiumY - intrinsicY));
+      ctx.fillRect(x + 3, Math.min(intrinsicY, premiumY), 2, Math.abs(premiumY - intrinsicY));
     }
     ctx.fillStyle = cap;
-    ctx.fillRect(x - 8, premiumY + (direction < 0 ? -4 : 0), 16, 4);
+    ctx.fillRect(x - 3, premiumY + (direction < 0 ? -2 : 0), 6, 2);
     ctx.fillStyle = '#ffffff';
-    ctx.font = '600 12px system-ui';
+    ctx.font = '600 10px system-ui';
     ctx.textAlign = 'center';
-    ctx.fillText('L' + (leg + 1), x, premiumY + (direction < 0 ? -10 : 18));
+    ctx.fillText('L' + (leg + 1), x, premiumY + (direction < 0 ? -6 : 12));
 
     const prefix = legs.length === 2 ? 'L' + (leg + 1) + ' ' : '';
     texts.intrinsic.push(prefix + format.format(intrinsic));
