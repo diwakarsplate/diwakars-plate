@@ -229,7 +229,7 @@ th,td{padding:8px 3px;border-bottom:1px solid var(--line)}th:first-child,td:firs
         <canvas id="plate" width="480" height="320" role="img" aria-label="Strike rings, spot ring and expiry payoff strip" aria-describedby="payoff-help"></canvas>
         <div class="legend"><span><i class="copper" aria-hidden="true"></i>Copper · ITM calls, OTM puts</span><span><i class="nickel" aria-hidden="true"></i>Nickel · OTM calls, ITM puts</span><span><i class="current" aria-hidden="true"></i>Spot boundary · ATM</span></div>
         <section class="premiometer" id="premiometer" hidden>
-          <div class="premiometer-head"><label for="premiometer-leg"><strong>Premiometer</strong></label><select id="premiometer-leg"><option value="0">Leg 1</option><option value="1">Leg 2</option></select></div>
+          <div class="premiometer-head"><label for="premiometer-leg"><strong>Premiometer</strong></label><select id="premiometer-leg"><option value="both">Both legs</option><option value="0">Leg 1</option><option value="1">Leg 2</option></select></div>
           <dl class="premiometer-values">
             <div><dt>Intrinsic</dt><dd id="premiometer-intrinsic"></dd></div>
             <div><dt>Extrinsic</dt><dd id="premiometer-extrinsic"></dd></div>
@@ -427,7 +427,7 @@ function drawStrikeLabels(ctx, xForLevel, y) {
   ctx.textAlign = 'center';
   strikes.forEach((k, i) => {
     const x = xForLevel(k);
-    const labelY = y + (stagger && i === 1 ? 78 : 59);
+    const labelY = y + (stagger && i === 1 ? 141 : 123);
     const tickTop = y + (k - minSpot < 250 || maxSpot - k < 250 ? 39 : 12);
     ctx.beginPath();
     ctx.moveTo(x, tickTop);
@@ -440,47 +440,53 @@ function drawStrikeLabels(ctx, xForLevel, y) {
   });
 }
 function drawPremiometer(ctx, xForLevel, y, spot, iv, days) {
-  const leg = Number(premiometerLeg.value);
-  const readings = strike.map((k, i) => ({
-    intrinsic: intrinsicValue(spot, k, optionTypes[i]),
-    premium: optionPrice(spot, k, iv, days, optionTypes[i])
-  }));
-  const {intrinsic, premium} = readings[leg];
-  const extrinsic = premium - intrinsic;
-  const x = xForLevel(strike[leg]);
-  const base = y - 7;
+  const readings = strike.map((k, i) => {
+    const intrinsic = intrinsicValue(spot, k, optionTypes[i]);
+    const premium = optionPrice(spot, k, iv, days, optionTypes[i]);
+    return {intrinsic, premium, extrinsic: premium - intrinsic};
+  });
+  const legs = premiometerLeg.value === 'both' ? [0, 1] : [Number(premiometerLeg.value)];
   const scale = 96 / Math.max(320, ...readings.flatMap(value => [value.intrinsic, value.premium]));
-  const intrinsicY = base - intrinsic * scale;
-  const premiumY = base - premium * scale;
-  const call = optionTypes[leg] === 'call';
-  const dark = call ? '#9560d5' : '#288f89';
-  const light = call ? '#d5b7fb' : '#92ded6';
-  const buy = quantity[leg] > 0;
-  const cap = buy ? '#448bff' : '#ff555a';
+  const texts = {intrinsic: [], extrinsic: [], premium: []};
+  const descriptions = [];
+  for (const leg of legs) {
+    const {intrinsic, premium, extrinsic} = readings[leg];
+    const direction = legs.length === 2 && leg === 1 ? 1 : -1;
+    const x = xForLevel(strike[leg]);
+    const base = y + direction * 7;
+    const intrinsicY = base + direction * intrinsic * scale;
+    const premiumY = base + direction * premium * scale;
+    const call = optionTypes[leg] === 'call';
+    const dark = call ? '#9560d5' : '#288f89';
+    const light = call ? '#d5b7fb' : '#92ded6';
+    const cap = quantity[leg] > 0 ? '#448bff' : '#ff555a';
 
-  ctx.fillStyle = '#e6f0eb';
-  ctx.fillRect(x - 1, base, 2, y - base);
-  ctx.fillStyle = dark;
-  ctx.fillRect(x - 7, intrinsicY, 14, base - intrinsicY);
-  ctx.fillStyle = light;
-  if (extrinsic >= 0) {
-    ctx.fillRect(x - 7, premiumY, 14, intrinsicY - premiumY);
-  } else {
-    // Show the deduction alongside the full intrinsic reading.
-    ctx.fillRect(x + 9, intrinsicY, 4, premiumY - intrinsicY);
+    ctx.fillStyle = '#e6f0eb';
+    ctx.fillRect(x - 1, Math.min(base, y), 2, Math.abs(y - base));
+    ctx.fillStyle = dark;
+    ctx.fillRect(x - 7, Math.min(intrinsicY, base), 14, Math.abs(base - intrinsicY));
+    ctx.fillStyle = light;
+    if (extrinsic >= 0) {
+      ctx.fillRect(x - 7, Math.min(premiumY, intrinsicY), 14, Math.abs(intrinsicY - premiumY));
+    } else {
+      ctx.fillRect(x + 9, Math.min(intrinsicY, premiumY), 4, Math.abs(premiumY - intrinsicY));
+    }
+    ctx.fillStyle = cap;
+    ctx.fillRect(x - 8, premiumY + (direction < 0 ? -4 : 0), 16, 4);
+    ctx.fillStyle = '#ffffff';
+    ctx.font = '600 12px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('L' + (leg + 1), x, premiumY + (direction < 0 ? -10 : 18));
+
+    const prefix = legs.length === 2 ? 'L' + (leg + 1) + ' ' : '';
+    texts.intrinsic.push(prefix + format.format(intrinsic));
+    texts.extrinsic.push(prefix + (extrinsic <= -.005 ? signed(extrinsic) : format.format(Math.abs(extrinsic))));
+    texts.premium.push(prefix + format.format(premium));
+    descriptions.push(' Premiometer for ' + describeLeg(leg) + '. Intrinsic ' + format.format(intrinsic) + ', extrinsic ' + signed(extrinsic) + ', premium ' + format.format(premium) + ' points per unit.');
   }
-  ctx.fillStyle = cap;
-  ctx.fillRect(x - 8, premiumY - 4, 16, 4);
-
-  const intrinsicText = format.format(intrinsic);
-  const extrinsicText = extrinsic <= -.005 ? signed(extrinsic) : format.format(Math.abs(extrinsic));
-  const premiumText = format.format(premium);
-  get('premiometer-intrinsic').textContent = intrinsicText;
-  get('premiometer-extrinsic').textContent = extrinsicText;
-  get('premiometer-premium').textContent = premiumText;
-  get('premiometer-note').textContent = 'Points per unit. ' + (call ? 'Purple call body. ' : 'Teal put body. ') + (buy ? 'Blue buy cap.' : 'Red sell cap.')
-    + (extrinsic <= -.005 ? ' The light side bar shows the extrinsic deduction.' : ' Dark shows intrinsic and light shows extrinsic.');
-  return ' Premiometer for ' + describeLeg(leg) + '. Intrinsic ' + intrinsicText + ', extrinsic ' + extrinsicText + ', premium ' + premiumText + ' points per unit.';
+  for (const key of Object.keys(texts)) get('premiometer-' + key).textContent = texts[key].join(' · ');
+  get('premiometer-note').textContent = 'Points per unit. Purple calls, teal puts. Blue buy caps, red sell caps. Dark intrinsic, light extrinsic. L1 extends above and L2 below the axis when both are shown. A light side bar indicates an extrinsic deduction.';
+  return descriptions.join('');
 }
 function drawPlate(spot, iv, days) {
   const ctx = plate.getContext('2d');
@@ -645,7 +651,7 @@ function render() {
   });
   get('legs').replaceChildren(...rows);
   for (let i = 0; i < strike.length; i++) {
-    premiometerLeg.options[i].textContent = 'Leg ' + (i + 1) + ' · ' + describeLeg(i);
+    premiometerLeg.options[i + 1].textContent = 'Leg ' + (i + 1) + ' · ' + describeLeg(i);
   }
   drawPlate(spot, iv, days);
   drawChart(spot, iv, days, pnl);
