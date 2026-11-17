@@ -99,9 +99,9 @@ canvas{display:block;width:100%;height:auto}
 .payoff-title{display:flex;flex-wrap:wrap;justify-content:space-between;gap:4px 12px;font-size:.83rem}
 .payoff-key .legend{margin-top:5px}
 .payoff-key .fine{margin-top:5px}
-.payoff-loss{background:#ff7771;border:1px solid #ac433c}
+.payoff-loss{background:#ff555a;border:1px solid #ac433c}
 .payoff-zero{background:#69747c;border:1px solid #4c575e}
-.payoff-gain{background:#50e3a1;border:1px solid #267b59}
+.payoff-gain{background:#34ff91;border:1px solid #267b59}
 .leg-moneyness{display:block;color:var(--muted);font-weight:500}
 #pnl{font-size:1.23rem}.gain{color:#116e60}.loss{color:#a53d2e}
 .scenario{grid-column:2;grid-row:2}.legs{grid-column:1;grid-row:2}
@@ -349,20 +349,30 @@ function expiryPayoffStops() {
 }
 function payoffColor(value, scale) {
   const neutral = [105, 116, 124];
-  const endpoint = value < 0 ? [255, 119, 113] : [80, 227, 161];
-  const strength = scale > 0 ? Math.abs(value) / scale : 0;
+  const endpoint = value < 0 ? [255, 85, 90] : [52, 255, 145];
+  const strength = scale > 0 ? Math.sqrt(Math.abs(value) / scale) : 0;
   const rgb = neutral.map((channel, i) => Math.round(channel + (endpoint[i] - channel) * strength));
   return 'rgb(' + rgb.join(', ') + ')';
 }
 function drawPayoffStrip(ctx, xForLevel, y, spot) {
   const left = xForLevel(minSpot), right = xForLevel(maxSpot);
-  const barHeight = 16;
+  const barHeight = 8;
   const stops = expiryPayoffStops();
   const scale = Math.max(...stops.map(stop => Math.abs(stop.value)));
   const gradient = ctx.createLinearGradient(left, y, right, y);
-  for (const {level, value} of stops) {
+  // Add intermediate colors to preserve the stronger shading near break-even.
+  function addStop(level, value) {
     gradient.addColorStop((level - minSpot) / (maxSpot - minSpot), payoffColor(value, scale));
   }
+  stops.forEach(({level, value}, i) => {
+    addStop(level, value);
+    const next = stops[i + 1];
+    if (next === undefined) return;
+    for (let step = 1; step < 8; step++) {
+      const fraction = step / 8;
+      addStop(level + fraction * (next.level - level), value + fraction * (next.value - value));
+    }
+  });
   ctx.fillStyle = gradient;
   ctx.fillRect(left, y - barHeight / 2, right - left, barHeight);
   ctx.strokeStyle = '#e1ebe799';
