@@ -62,6 +62,7 @@ p{color:var(--muted);margin:0 0 14px}
 .strike-form fieldset{border:0;margin:0;padding:0;min-width:0}
 .strike-form legend{font-size:.86rem;font-weight:720;padding:0}
 .strike-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.strike-fields h4{margin:6px 0 0;font-size:.84rem}
 .strike-fields label{display:block;margin:6px 0 3px;font-size:.78rem}
 .strike-fields input,.strike-fields select,.chain-target select{width:100%;min-width:0;padding:6px;border:1px solid #8d9d90;border-radius:4px;background:white;color:var(--ink);font:inherit;font-size:1rem}
 .strike-form .apply-strikes{margin-top:8px;padding:6px 10px;background:var(--accent);color:white;font-weight:720}
@@ -157,34 +158,40 @@ th,td{padding:8px 3px;border-bottom:1px solid var(--line)}th:first-child,td:firs
         <div class="panel-title"><h3>Scenario inputs</h3><button type="button" id="reset">Reset</button></div>
         <details class="option-chain" open>
           <summary>Simulated NIFTY option chain</summary>
-          <p class="fine" id="chain-help">Model premiums in index points at the scenario spot, IV and days to expiry. Choose a leg and select a call or put.</p>
-          <div class="chain-target"><label for="chain-target">Choose for</label><select id="chain-target"><option value="0">Buy leg</option><option value="1">Sell leg</option></select></div>
+          <p class="fine" id="chain-help">Model premiums in index points at the scenario spot, IV and days to expiry. Choose Leg 1 or Leg 2, then select a call or put.</p>
+          <div class="chain-target"><label for="chain-target">Choose for</label><select id="chain-target"><option value="0">Leg 1</option><option value="1">Leg 2</option></select></div>
           <div id="chain-scroll" class="chain-scroll" role="region" tabindex="0" aria-label="Scrollable option chain">
             <table aria-describedby="chain-help"><thead><tr><th scope="col">Calls (CE)</th><th scope="col">Strike</th><th scope="col">Puts (PE)</th></tr></thead><tbody id="chain-rows"></tbody></table>
           </div>
         </details>
         <form id="strike-form" class="strike-form">
           <fieldset>
-            <legend>Choose strikes and lots</legend>
+            <legend>Choose each leg</legend>
             <div class="strike-fields">
-              <div>
-                <label for="long-type">Buy option</label>
-                <select id="long-type"><option value="call">Call (CE)</option><option value="put">Put (PE)</option></select>
-                <label for="long-strike">Buy strike</label>
-                <input id="long-strike" type="number" inputmode="numeric" min="23500" max="26500" step="1" value="25000" required aria-describedby="strike-help">
-                <label for="long-lots">Lots to buy</label>
-                <input id="long-lots" type="number" inputmode="numeric" min="1" step="1" value="1" required>
+              <div role="group" aria-labelledby="leg-1-heading">
+                <h4 id="leg-1-heading">Leg 1</h4>
+                <label for="leg-1-side">Buy or sell</label>
+                <select id="leg-1-side"><option value="buy">Buy</option><option value="sell">Sell</option></select>
+                <label for="leg-1-type">Option type</label>
+                <select id="leg-1-type"><option value="call">Call (CE)</option><option value="put">Put (PE)</option></select>
+                <label for="leg-1-strike">Strike</label>
+                <input id="leg-1-strike" type="number" inputmode="numeric" min="23500" max="26500" step="1" value="25000" required aria-describedby="strike-help">
+                <label for="leg-1-lots">Lots</label>
+                <input id="leg-1-lots" type="number" inputmode="numeric" min="1" step="1" value="1" required>
               </div>
-              <div>
-                <label for="short-type">Sell option</label>
-                <select id="short-type"><option value="call">Call (CE)</option><option value="put">Put (PE)</option></select>
-                <label for="short-strike">Sell strike</label>
-                <input id="short-strike" type="number" inputmode="numeric" min="23500" max="26500" step="1" value="25200" required aria-describedby="strike-help">
-                <label for="short-lots">Lots to sell</label>
-                <input id="short-lots" type="number" inputmode="numeric" min="1" step="1" value="4" required>
+              <div role="group" aria-labelledby="leg-2-heading">
+                <h4 id="leg-2-heading">Leg 2</h4>
+                <label for="leg-2-side">Buy or sell</label>
+                <select id="leg-2-side"><option value="sell">Sell</option><option value="buy">Buy</option></select>
+                <label for="leg-2-type">Option type</label>
+                <select id="leg-2-type"><option value="call">Call (CE)</option><option value="put">Put (PE)</option></select>
+                <label for="leg-2-strike">Strike</label>
+                <input id="leg-2-strike" type="number" inputmode="numeric" min="23500" max="26500" step="1" value="25200" required aria-describedby="strike-help">
+                <label for="leg-2-lots">Lots</label>
+                <input id="leg-2-lots" type="number" inputmode="numeric" min="1" step="1" value="4" required>
               </div>
             </div>
-            <p id="strike-help" class="fine">Pick from the chain or enter whole strikes from 23,500 to 26,500. Apply the position to update the Plate and P&amp;L.</p>
+            <p id="strike-help" class="fine">Choose Buy or Sell for each leg. Pick strikes from the chain or enter whole strikes from 23,500 to 26,500.</p>
             <button class="apply-strikes" type="submit">Apply position</button>
             <p id="strike-status" class="strike-status" role="status"></p>
           </fieldset>
@@ -227,14 +234,11 @@ const format = new Intl.NumberFormat('en-IN', {maximumFractionDigits: 2, minimum
 const whole = new Intl.NumberFormat('en-IN', {maximumFractionDigits: 0});
 const get = id => document.getElementById(id);
 const strikeForm = get('strike-form');
-const longStrikeInput = get('long-strike');
-const shortStrikeInput = get('short-strike');
-const longLotsInput = get('long-lots');
-const shortLotsInput = get('short-lots');
-const lotInputs = [longLotsInput, shortLotsInput];
 const strikeStatus = get('strike-status');
-const strikeInputs = [longStrikeInput, shortStrikeInput];
-const typeInputs = [get('long-type'), get('short-type')];
+const strikeInputs = [get('leg-1-strike'), get('leg-2-strike')];
+const typeInputs = [get('leg-1-type'), get('leg-2-type')];
+const lotInputs = [get('leg-1-lots'), get('leg-2-lots')];
+const sideInputs = [get('leg-1-side'), get('leg-2-side')];
 const chainTarget = get('chain-target');
 const chainScroll = get('chain-scroll');
 let strike, quantity, optionTypes;
@@ -292,8 +296,8 @@ function entryValues() {
 }
 let entry;
 function applyPosition() {
-  strike = [longStrikeInput.valueAsNumber, shortStrikeInput.valueAsNumber];
-  quantity = [longLotsInput.valueAsNumber, -shortLotsInput.valueAsNumber];
+  strike = strikeInputs.map(input => input.valueAsNumber);
+  quantity = lotInputs.map((input, i) => sideInputs[i].value === 'buy' ? input.valueAsNumber : -input.valueAsNumber);
   optionTypes = typeInputs.map(input => input.value);
   entry = entryValues();
   renderPositionRisk();
@@ -312,6 +316,10 @@ function totalAt(spot, iv, days) {
 function signed(value) {
   if (Math.abs(value) < .005) return '0.00';
   return (value < 0 ? '−' : '+') + format.format(Math.abs(value));
+}
+function describeLeg(i) {
+  const lots = quantity[i];
+  return (lots > 0 ? 'Buy ' : 'Sell ') + whole.format(Math.abs(lots)) + ' × ' + whole.format(strike[i]) + ' ' + optionCode(optionTypes[i]);
 }
 function drawPlate(spot) {
   const ctx = plate.getContext('2d');
@@ -342,8 +350,7 @@ function drawPlate(spot) {
     if (k !== spot) ring(k, k < spot ? plateColors.copper : plateColors.nickel, 2);
   }
   ring(spot, plateColors.spot, 2.5, [6, 4]);
-  const legLabels = strike.map((k, i) =>
-    (i === 0 ? 'Buy ' : 'Sell ') + whole.format(Math.abs(quantity[i])) + ' lots at ' + whole.format(k) + ' ' + optionCode(optionTypes[i]) + ', ' + moneyness(spot, k, optionTypes[i]));
+  const legLabels = strike.map((k, i) => describeLeg(i) + ', ' + moneyness(spot, k, optionTypes[i]));
   plate.setAttribute('aria-label', 'NIFTY spot ' + whole.format(spot) + '. ' + legLabels.join('. ') + '.');
   ctx.fillStyle = '#ebf8ed';
   ctx.font = '600 22px system-ui';
@@ -439,7 +446,7 @@ function render() {
     const row = document.createElement('tr');
     const label = document.createElement('th');
     label.scope = 'row';
-    label.textContent = (i === 0 ? '+' : '−') + whole.format(Math.abs(quantity[i])) + ' × ' + whole.format(strike[i]) + ' ' + optionCode(optionTypes[i]);
+    label.textContent = (quantity[i] > 0 ? '+' : '−') + whole.format(Math.abs(quantity[i])) + ' × ' + whole.format(strike[i]) + ' ' + optionCode(optionTypes[i]);
     const moneynessLabel = document.createElement('small');
     moneynessLabel.className = 'leg-moneyness';
     moneynessLabel.textContent = moneyness(spot, strike[i], optionTypes[i]);
@@ -463,6 +470,7 @@ function render() {
   markChainSelection();
 }));
 chainTarget.addEventListener('change', markChainSelection);
+sideInputs.forEach(input => input.addEventListener('change', () => { strikeStatus.textContent = ''; }));
 lotInputs.forEach(input => input.addEventListener('input', () => {
   input.setCustomValidity('');
   strikeStatus.textContent = '';
@@ -477,7 +485,7 @@ strikeForm.addEventListener('submit', event => {
   }
   applyPosition();
   render();
-  strikeStatus.textContent = 'Applied ' + whole.format(quantity[0]) + ' buy lots and ' + whole.format(-quantity[1]) + ' sell lots.';
+  strikeStatus.textContent = describeLeg(0) + ' · ' + describeLeg(1) + ' applied.';
 });
 get('reset').addEventListener('click', () => {
   strikeForm.reset();
@@ -515,7 +523,7 @@ for (let k = minSpot; k <= maxSpot; k += 50) {
       const i = Number(chainTarget.value);
       strikeInputs[i].value = k;
       typeInputs[i].value = type;
-      strikeStatus.textContent = 'Ready to apply ' + (i === 0 ? 'buy ' : 'sell ') + whole.format(k) + ' ' + optionCode(type) + '.';
+      strikeStatus.textContent = 'Leg ' + (i + 1) + ' selected ' + whole.format(k) + ' ' + optionCode(type) + '. Apply position to update the Plate.';
       markChainSelection();
     });
     cell.append(button);
