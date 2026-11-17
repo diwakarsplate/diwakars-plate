@@ -95,6 +95,13 @@ canvas{display:block;width:100%;height:auto}
 .legend .copper{background:var(--plate-copper);border:1px solid #975132}
 .legend .nickel{background:var(--plate-nickel);border:1px solid #657a80}
 .legend .current{background:var(--plate-spot);border:1px solid #267b67}
+.payoff-key{border-top:1px solid var(--line);padding-top:8px;margin-top:12px}
+.payoff-title{display:flex;flex-wrap:wrap;justify-content:space-between;gap:4px 12px;font-size:.83rem}
+.payoff-key .legend{margin-top:5px}
+.payoff-key .fine{margin-top:5px}
+.payoff-loss{background:#ff7771;border:1px solid #ac433c}
+.payoff-zero{background:#69747c;border:1px solid #4c575e}
+.payoff-gain{background:#50e3a1;border:1px solid #267b59}
 .leg-moneyness{display:block;color:var(--muted);font-weight:500}
 #pnl{font-size:1.23rem}.gain{color:#116e60}.loss{color:#a53d2e}
 .scenario{grid-column:2;grid-row:2}.legs{grid-column:1;grid-row:2}
@@ -206,8 +213,13 @@ th,td{padding:8px 3px;border-bottom:1px solid var(--line)}th:first-child,td:firs
       </article>
       <article class="panel figure-panel">
         <div class="panel-title"><h3>The Unified Plate</h3><span class="status">Synthetic</span></div>
-        <canvas id="plate" width="600" height="320" role="img" aria-label="Strike rings and scenario spot ring"></canvas>
+        <canvas id="plate" width="480" height="320" role="img" aria-label="Strike rings, spot ring and expiry payoff strip" aria-describedby="payoff-help"></canvas>
         <div class="legend"><span><i class="copper" aria-hidden="true"></i>Copper · ITM calls, OTM puts</span><span><i class="nickel" aria-hidden="true"></i>Nickel · OTM calls, ITM puts</span><span><i class="current" aria-hidden="true"></i>Spot boundary · ATM</span></div>
+        <div class="payoff-key">
+          <div class="payoff-title"><strong>Expiry payoff</strong><span>At selected spot <strong id="expiry-payoff"></strong></span></div>
+          <div class="legend"><span><i class="payoff-loss" aria-hidden="true"></i>Loss</span><span><i class="payoff-zero" aria-hidden="true"></i>Break-even</span><span><i class="payoff-gain" aria-hidden="true"></i>Profit</span></div>
+          <p class="fine" id="payoff-help">The horizontal strip on the right shows expiry P&amp;L after entry premium. Brighter colors show larger gains or losses on a shared scale. The turquoise tick marks the selected spot. Values are in lot-weighted index points.</p>
+        </div>
       </article>
       <article class="panel scenario">
         <div class="panel-title"><h3>Scenario P&amp;L</h3><strong id="pnl" aria-live="polite"></strong></div>
@@ -321,9 +333,62 @@ function describeLeg(i) {
   const lots = quantity[i];
   return (lots > 0 ? 'Buy ' : 'Sell ') + whole.format(Math.abs(lots)) + ' × ' + whole.format(strike[i]) + ' ' + optionCode(optionTypes[i]);
 }
+function expiryPayoff(spot) {
+  return totalAt(spot, 0, 0);
+}
+function expiryPayoffStops() {
+  // Between strikes, expiry payoff is linear. Insert a neutral stop at each crossing.
+  const levels = [...new Set([minSpot, ...strike, maxSpot])].sort((a, b) => a - b);
+  const knots = levels.map(level => ({level, value: expiryPayoff(level)}));
+  return knots.flatMap((knot, i) => {
+    const next = knots[i + 1];
+    if (!next || knot.value * next.value >= 0) return [knot];
+    const fraction = -knot.value / (next.value - knot.value);
+    return [knot, {level: knot.level + fraction * (next.level - knot.level), value: 0}];
+  });
+}
+function payoffColor(value, scale) {
+  const neutral = [105, 116, 124];
+  const endpoint = value < 0 ? [255, 119, 113] : [80, 227, 161];
+  const strength = scale > 0 ? Math.abs(value) / scale : 0;
+  const rgb = neutral.map((channel, i) => Math.round(channel + (endpoint[i] - channel) * strength));
+  return 'rgb(' + rgb.join(', ') + ')';
+}
+function drawPayoffStrip(ctx, xForLevel, y, spot) {
+  const left = xForLevel(minSpot), right = xForLevel(maxSpot);
+  const barHeight = 16;
+  const stops = expiryPayoffStops();
+  const scale = Math.max(...stops.map(stop => Math.abs(stop.value)));
+  const gradient = ctx.createLinearGradient(left, y, right, y);
+  for (const {level, value} of stops) {
+    gradient.addColorStop((level - minSpot) / (maxSpot - minSpot), payoffColor(value, scale));
+  }
+  ctx.fillStyle = gradient;
+  ctx.fillRect(left, y - barHeight / 2, right - left, barHeight);
+  ctx.strokeStyle = '#e1ebe799';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(left, y - barHeight / 2, right - left, barHeight);
+
+  const markerX = xForLevel(spot);
+  ctx.beginPath();
+  ctx.moveTo(markerX, y - barHeight / 2 - 5);
+  ctx.lineTo(markerX, y + barHeight / 2 + 5);
+  ctx.strokeStyle = '#102a27';
+  ctx.lineWidth = 5;
+  ctx.stroke();
+  ctx.strokeStyle = plateColors.spot;
+  ctx.lineWidth = 2.5;
+  ctx.stroke();
+
+  ctx.fillStyle = '#e6f0eb';
+  ctx.font = '13px system-ui';
+  ctx.textAlign = 'center';
+  ctx.fillText(whole.format(minSpot), left, y + 33);
+  ctx.fillText(whole.format(maxSpot), right, y + 33);
+}
 function drawPlate(spot) {
   const ctx = plate.getContext('2d');
-  const centerX = 300, centerY = 165;
+  const centerX = plate.width / 2, centerY = 165;
   const radius = level => 25 + (level - minSpot) / (maxSpot - minSpot) * 127;
   ctx.clearRect(0, 0, plate.width, plate.height);
   function circle(level) {
@@ -350,15 +415,18 @@ function drawPlate(spot) {
     if (k !== spot) ring(k, k < spot ? plateColors.copper : plateColors.nickel, 2);
   }
   ring(spot, plateColors.spot, 2.5, [6, 4]);
+  drawPayoffStrip(ctx, level => centerX + radius(level), centerY, spot);
+  const payoff = signed(expiryPayoff(spot)) + ' pts';
+  get('expiry-payoff').textContent = payoff;
   const legLabels = strike.map((k, i) => describeLeg(i) + ', ' + moneyness(spot, k, optionTypes[i]));
-  plate.setAttribute('aria-label', 'NIFTY spot ' + whole.format(spot) + '. ' + legLabels.join('. ') + '.');
+  plate.setAttribute('aria-label', 'NIFTY spot ' + whole.format(spot) + '. ' + legLabels.join('. ') + '. Expiry payoff at selected spot ' + payoff + '.');
   ctx.fillStyle = '#ebf8ed';
   ctx.font = '600 22px system-ui';
   ctx.textAlign = 'center';
-  ctx.fillText(whole.format(spot), centerX, centerY + 7);
+  ctx.fillText(whole.format(spot), centerX, centerY - 31);
   ctx.font = '13px system-ui';
   ctx.fillStyle = '#aed3c3';
-  ctx.fillText('NIFTY SPOT', centerX, centerY + 28);
+  ctx.fillText('NIFTY SPOT', centerX, centerY - 12);
 }
 function drawChart(spot, iv, days, pnl) {
   const ctx = chart.getContext('2d');
